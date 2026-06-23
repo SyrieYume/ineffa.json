@@ -15,16 +15,16 @@ class trailing_array {
 
 public:
     static auto create(unsigned capacity = 4) -> trailing_array* {
-        void *mem = allocator::allocate(sizeof(trailing_array) + capacity * sizeof(T));
+        auto* mem = allocator::template allocate<trailing_array>(sizeof(trailing_array) + capacity * sizeof(T));
         return new (mem) trailing_array(0, capacity);
     }
 
-    static auto create(T* __restrict data, unsigned data_size) -> trailing_array*
+    static auto create(const T* __restrict data, unsigned size) -> trailing_array*
         requires std::is_trivially_copyable_v<T> || requires { typename T::trivially_relocatable; }
     {
-        void *mem = allocator::allocate(sizeof(trailing_array) + data_size * sizeof(T));
-        trailing_array* arr = new (mem) trailing_array(data_size, data_size);
-        std::memcpy((void*)arr->data(), (void*)data, data_size * sizeof(T));
+        auto* mem = allocator::template allocate<trailing_array>(sizeof(trailing_array) + size * sizeof(T));
+        trailing_array* arr = new (mem) trailing_array(size, size);
+        std::memcpy(arr->data(), data, size * sizeof(T));
         return arr;
     }
 
@@ -36,11 +36,11 @@ public:
         return capacity_;
     }
 
-    auto data() noexcept -> T* __restrict {
+    auto data() noexcept -> T* {
         return std::launder(reinterpret_cast<T*>(this + 1));
     }
 
-    auto data() const noexcept -> const T* __restrict {
+    auto data() const noexcept -> const T* {
         return std::launder(reinterpret_cast<const T*>(this + 1));
     }
 
@@ -49,7 +49,7 @@ public:
     {
         new_capacity = std::max(size_, new_capacity);
 
-        auto* new_arr = (decltype(this))allocator::reallocate(this, sizeof(trailing_array) + new_capacity * sizeof(T));
+        auto* new_arr = allocator::template reallocate<trailing_array>(this, sizeof(trailing_array) + new_capacity * sizeof(T));
         new_arr->capacity_ = new_capacity;
         
         std::invoke(set_ptr_fn, owner, new_arr); 
@@ -76,7 +76,7 @@ public:
         std::destroy_at(data() + i);
 
         if (i != --size_)
-            std::memmove((void*)(data() + i), (void*)(data() + i + 1), sizeof(T) * (size_ - i));
+            std::memmove(data() + i, data() + i + 1, sizeof(T) * (size_ - i));
     }
 
     auto span() noexcept -> std::span<T> {

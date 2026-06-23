@@ -1,6 +1,7 @@
 #pragma once
-#include "json_object.hpp"
 #include <expected>
+#include <charconv>
+#include "json_object.hpp"
 
 namespace ineffa::json {
 
@@ -19,7 +20,7 @@ struct parser_stack {
     unsigned size = 0;
 
     parser_stack(unsigned init_capacity = 64) :
-        data((T*)json::allocator::allocate(sizeof(T) * init_capacity, (std::align_val_t)alignof(T))),
+        data(json::allocator::allocate_n<T>(init_capacity)),
         capacity(init_capacity),
         size(0)
     {}
@@ -27,25 +28,23 @@ struct parser_stack {
     void reserve(unsigned new_capacity) {
         if (new_capacity > capacity) [[unlikely]] {
             new_capacity = std::max(new_capacity, capacity * 3 / 2);
-            data = (T*)json::allocator::reallocate(data, sizeof(T) * new_capacity, (std::align_val_t)alignof(T));
+            data = json::allocator::reallocate_n<T>(data, new_capacity);
             capacity = new_capacity;
         }
     }
 
     void append(const T* __restrict src, unsigned src_size) noexcept {
         reserve(size + src_size);
-        std::memcpy((void*)(data + size), (void*)src, src_size * sizeof(T));
+        std::memcpy(data + size, src, src_size * sizeof(T));
         size += src_size;
     }
 
     void uncheck_push(const T val) noexcept {
-        data[size++] = val;
+        data[size++] = std::move(val);
     }
 
     void emplace_back(auto&&... args) {
-        if (size == capacity) [[unlikely]]
-            reserve(capacity + 1);
-
+        reserve(size + 1);
         std::construct_at(data + size, std::forward<decltype(args)>(args)...);
         size++;
     }
@@ -57,7 +56,7 @@ struct parser_stack {
 
     ~parser_stack() noexcept {
         std::destroy_n(data, size);
-        json::allocator::deallocate(data, (std::align_val_t)alignof(T));
+        json::allocator::deallocate(data);
     }
 }; // struct ineffa::json::details::parser_stack
 

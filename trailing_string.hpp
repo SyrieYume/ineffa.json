@@ -14,21 +14,21 @@ class trailing_string {
     }
 
 public:
-    auto size() const noexcept -> unsigned {
+    static auto create(std::string_view sv) -> trailing_string* {
+        std::byte* mem = allocator::allocate(sizeof(trailing_string) + sv.size() + 1);
+        return new (mem) trailing_string(sv);
+    }
+
+  auto size() const noexcept -> unsigned {
         return size_;
     }
 
     auto data() const noexcept -> const char* __restrict {
-        return std::launder(reinterpret_cast<const char* __restrict>(this) + 4);
+        return std::launder(reinterpret_cast<const char*>(this + 1));
     }
 
     auto data() noexcept -> char* __restrict {
-        return std::launder(reinterpret_cast<char* __restrict>(this) + 4);
-    }
-
-    static auto create(std::string_view sv) -> trailing_string* {
-        void* mem = allocator::allocate(4 + sv.size() + 1);
-        return new (mem) trailing_string(sv);
+        return std::launder(reinterpret_cast<char*>(this + 1));
     }
 
     auto sv() const noexcept -> std::string_view {

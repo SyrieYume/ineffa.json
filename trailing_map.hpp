@@ -17,17 +17,17 @@ public:
     using key_string = ineffa::tiny_string<allocator>;
 
     static auto create(unsigned capacity = 4) -> trailing_map* {
-        void *mem = allocator::allocate(sizeof(trailing_map) + capacity * (sizeof(key_string) + sizeof(T)), std::align_val_t(16));
+        auto* mem = allocator::template allocate<trailing_map>(sizeof(trailing_map) + capacity * (sizeof(key_string) + sizeof(T)));
         return new (mem) trailing_map(0, capacity);
     }
 
-    static auto create(key_string* __restrict keys_data, T* __restrict values_data, unsigned data_size) -> trailing_map*
+    static auto create(key_string* __restrict keys_data, T* __restrict values_data, unsigned size) -> trailing_map*
         requires std::is_trivially_copyable_v<T> || requires { typename T::trivially_relocatable; } 
     {
-        void *mem = allocator::allocate(sizeof(trailing_map) + data_size * (sizeof(key_string) + sizeof(T)), std::align_val_t(16));
-        trailing_map* map = new (mem) trailing_map(data_size, data_size);
-        std::memcpy((void*)map->keys(), (void*)keys_data, data_size * sizeof(key_string));
-        std::memcpy((void*)map->values(), (void*)values_data, data_size * sizeof(T));
+        auto* mem = allocator::template allocate<trailing_map>(sizeof(trailing_map) + size * (sizeof(key_string) + sizeof(T)));
+        trailing_map* map = new (mem) trailing_map(size, size);
+        std::memcpy(map->keys(), keys_data, size * sizeof(key_string));
+        std::memcpy(map->values(), values_data, size * sizeof(T));
         return map;
     }
 
@@ -38,7 +38,7 @@ public:
         if (target_key.length() <= 15) {
            alignas(16) const key_string target_key_bin = target_key;
             for (int i = 0; i < n; i++)
-                if (std::memcmp((void*)(keys + i), (void*)&target_key_bin, 16) == 0) return i;
+                if (std::memcmp(keys + i, &target_key_bin, 16) == 0) return i;
         }
         else {
             for (int i = 0; i < n; i++)
@@ -102,12 +102,12 @@ public:
     {
         new_capacity = std::max(size_, new_capacity);
 
-        auto* new_map = (decltype(this))allocator::reallocate(this, sizeof(trailing_map) + new_capacity * (sizeof(key_string) + sizeof(T)), std::align_val_t(16));
-        std::memmove((void*)(new_map->keys() + new_capacity), (void*)(new_map->values()), sizeof(T) * new_map->size_);
-        new_map->capacity_ = new_capacity;
+        auto* self = allocator::template reallocate<trailing_map>(this, sizeof(trailing_map) + new_capacity * (sizeof(key_string) + sizeof(T)));
+        std::memmove(self->keys() + new_capacity, self->values(), sizeof(T) * self->size_);
+        self->capacity_ = new_capacity;
         
-        std::invoke(set_ptr_fn, owner, new_map); 
-        return new_map;
+        std::invoke(set_ptr_fn, owner, self); 
+        return self;
     }
 
     auto size() const noexcept -> unsigned {
@@ -137,7 +137,7 @@ public:
     ~trailing_map() noexcept {
         std::destroy_n(keys(), size());
         std::destroy_n(values(), size());
-        allocator::deallocate(this, std::align_val_t(16));
+        allocator::deallocate(this);
     }
 };
 
